@@ -26,10 +26,11 @@ import numpy as np
 #from PIL import ImageGrab
 
 
-class MotionDetection:
+class MotionDetector:
     __version__ = "v0.1 - 2023-05-04"
     previous_frame = None
     camera_number = 0
+    camera = None
 
     @classmethod
     def version(cls) -> str:
@@ -39,14 +40,14 @@ class MotionDetection:
 
     def doIt(self):
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
-        cam = cv2.VideoCapture(self.camera_number)
-        if not cam.isOpened():
+        self.camera = cv2.VideoCapture(self.camera_number)
+        if not self.camera.isOpened():
             print("Cannot open camera")
             exit()
         while True:
             # Capture an image from the camera:
             # RPi: https://pillow.readthedocs.io/en/stable/reference/ImageGrab.html
-            ret_val, img_brg = cam.read() #cam.read() returns ret (0/1 if the camera is working) and img_brg, the actual image of the camera in a numpy array
+            ret_val, img_brg = self.camera.read() #cam.read() returns ret (0/1 if the camera is working) and img_brg, the actual image of the camera in a numpy array
             # if frame is read correctly ret is True
             if not ret_val:
                 print("Can't receive frame (stream end?). Exiting ...")
@@ -106,15 +107,48 @@ class MotionDetection:
     #            break
             if cv2.waitKey(1) == ord('q'):
                 break
+        # Stop the streaming when the user presses the "q" key:
+        self.stop()
 
-        # When everything done, release the capture
-        cam.release()
-        cv2.destroyAllWindows()
 
+    def stop(self):
+        if not self.camera is None:
+            # When everything done, release the capture
+            print("Stopping the camera stream...")
+            self.camera.release()
+            cv2.destroyAllWindows()
+
+# -----
 
 if __name__ == "__main__":
+    # Run this code when this file is opened as an application:
+    motion_detector = None
+
+    def signal_handler(signum, frame):
+        """ Handle CRTL+C and other kill events """
+        print("Killing the app...")
+        if not motion_detector is None:
+            motion_detector.stop()
+        exit(0)
+
+    # Set signal handlers to deal with CTRL+C presses and other ways to kill this process.
+    # We do this to close the web browser window and cleanup resources:
+    import signal
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Define the command-line arguments that the app supports:
+    import argparse
+    parser=argparse.ArgumentParser(description="Detect motion in a camera feed.")
+    parser.add_argument("--version", \
+                            action="version", \
+                            version=MotionDetector.__version__)
+    # Parse the command-line arguments:
+    __ARGS=parser.parse_args()
+
     # Start the app:
-    print(f"Starting {MotionDetection.version()}")
-    motion = MotionDetection()
+    print(f"Starting {MotionDetector.version()}")
+    motion_detector = MotionDetector()
     print("Press the 'q' key to stop the app")
-    motion.doIt()
+    motion_detector.doIt()
+    print("Ending the app")
