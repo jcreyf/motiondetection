@@ -27,9 +27,6 @@ from datetime import datetime
 
 class MotionDetector:
     __version__ = "v0.1 - 2023-05-04"
-    previous_frame = None
-    camera_number = 0
-    camera = None
 
     @classmethod
     def version(cls) -> str:
@@ -37,19 +34,26 @@ class MotionDetector:
         return f"{cls.__name__}: {cls.__version__}"
 
 
+    def __init__(self) -> None:
+        """ Constructor, initializing properties with default values. """
+        self.previous_frame = None
+        self.camera_number = 0
+        self.camera = None
+
+
     def listCameras(self):
         pass
 
 
-    def loadConfig(self):
+    def loadConfig(self) -> None:
         pass
 
 
-    def sendAlert(self):
+    def sendAlert(self) -> None:
         pass
 
 
-    def log(self, msg: str):
+    def log(self, msg: str) -> None:
         """ Method to log messages.
 
         We have to assume that this process may be running in the background and that output is piped to
