@@ -20,11 +20,10 @@
 #   - send a message with the base image and zoomed in pictures.  Also add link to where video will be stored;
 
 # pip install -r requirements.txt
-import os
 import cv2
 import numpy as np
 #from PIL import ImageGrab
-
+from datetime import datetime
 
 class MotionDetector:
     __version__ = "v0.1 - 2023-05-04"
@@ -36,6 +35,33 @@ class MotionDetector:
     def version(cls) -> str:
         """ Static app version details """
         return f"{cls.__name__}: {cls.__version__}"
+
+
+    def listCameras(self):
+        pass
+
+
+    def loadConfig(self):
+        pass
+
+
+    def sendAlert(self):
+        pass
+
+
+    def log(self, msg: str):
+        """ Method to log messages.
+
+        We have to assume that this process may be running in the background and that output is piped to
+        a log-file.  Because of that, make sure we flush the stdout buffer to keep tails in sync with the
+        real world.
+        """
+        print(f"{datetime.now().strftime('%m/%d %H:%M:%S')}: {msg}", flush=True)
+
+
+    def logDebug(self, msg: str):
+        if self.debug:
+            self.log(f"DEBUG: {msg}")
 
 
     def doIt(self):
