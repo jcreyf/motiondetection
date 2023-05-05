@@ -63,12 +63,12 @@ class MotionDetector:
         print(f"{datetime.now().strftime('%m/%d %H:%M:%S')}: {msg}", flush=True)
 
 
-    def logDebug(self, msg: str):
+    def logDebug(self, msg: str) -> None:
         if self.debug:
             self.log(f"DEBUG: {msg}")
 
 
-    def doIt(self):
+    def doIt(self) -> None:
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
         self.camera = cv2.VideoCapture(self.camera_number)
         if not self.camera.isOpened():
