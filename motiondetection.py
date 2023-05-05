@@ -55,7 +55,6 @@ class MotionDetector:
 
             # Convert the image to RGB:
             img_rgb = cv2.cvtColor(src=img_brg, code=cv2.COLOR_BGR2RGB)
-
             # Convert the image; grayscale and blur
             prepared_frame = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
             prepared_frame = cv2.GaussianBlur(src=prepared_frame, ksize=(5, 5), sigmaX=0)
@@ -69,11 +68,9 @@ class MotionDetector:
             # Calculate difference and update previous frame
             diff_frame = cv2.absdiff(src1=self.previous_frame, src2=prepared_frame)
             self.previous_frame = prepared_frame
-
             # Dilute the image a bit to make differences more seeable; more suitable for contour detection
             kernel = np.ones((5, 5))
             diff_frame = cv2.dilate(diff_frame, kernel, 1)
-
             # Only take different areas that are different enough (>20 / 255)
             thresh_frame = cv2.threshold(
                 src=diff_frame, thresh=20, maxval=255, type=cv2.THRESH_BINARY
