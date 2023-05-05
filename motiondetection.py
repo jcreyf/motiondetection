@@ -72,7 +72,7 @@ class MotionDetector:
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
         self.camera = cv2.VideoCapture(self.camera_number)
         if not self.camera.isOpened():
-            print("Cannot open camera")
+            self.log("Cannot open camera")
             exit()
         while True:
             # Capture an image from the camera:
@@ -80,7 +80,7 @@ class MotionDetector:
             ret_val, img_brg = self.camera.read() #cam.read() returns ret (0/1 if the camera is working) and img_brg, the actual image of the camera in a numpy array
             # if frame is read correctly ret is True
             if not ret_val:
-                print("Can't receive frame (stream end?). Exiting ...")
+                self.log("Can't receive frame (stream end?). Exiting ...")
                 break
 
             # Convert the image to RGB:
@@ -141,7 +141,7 @@ class MotionDetector:
     def stop(self):
         if not self.camera is None:
             # When everything done, release the capture
-            print("Stopping the camera stream...")
+            self.log("Stopping the camera stream...")
             self.camera.release()
             cv2.destroyAllWindows()
 
