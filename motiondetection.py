@@ -27,9 +27,10 @@ import numpy as np
 
 def motiondetection():
     previous_frame = None
+    camera_number = 0
 
     # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
-    cam = cv2.VideoCapture(0)
+    cam = cv2.VideoCapture(camera_number)
     if not cam.isOpened():
         print("Cannot open camera")
         exit()
@@ -103,4 +104,5 @@ def motiondetection():
 
 
 if __name__ == "__main__":
+    # Start the app:
     motiondetection()
