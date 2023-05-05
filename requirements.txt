@@ -6,4 +6,4 @@ opencv-python>=4.7.0.72
 # https://pypi.org/project/numpy/
 numpy>=1.24.3
 # https://pypi.org/project/Pillow/
-Pillow>=9.5.0
+#Pillow>=9.5.0
