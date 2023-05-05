@@ -36,9 +36,19 @@ class MotionDetector:
 
     def __init__(self) -> None:
         """ Constructor, initializing properties with default values. """
-        self.previous_frame = None
-        self.camera_number = 0
-        self.camera = None
+        self._previous_frame = None
+        self._camera_number = 0
+        self._camera = None
+        self._opencv_diffing_threshold = 20
+
+
+    @property
+    def diffingThreshold(self) -> int:
+        return self._opencv_diffing_threshold
+
+    @diffingThreshold.setter
+    def diffingThreshold(self, value: int) -> None:
+        self._opencv_diffing_threshold = value
 
 
     def listCameras(self):
@@ -70,14 +80,14 @@ class MotionDetector:
 
     def doIt(self) -> None:
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
-        self.camera = cv2.VideoCapture(self.camera_number)
-        if not self.camera.isOpened():
+        self._camera = cv2.VideoCapture(self._camera_number)
+        if not self._camera.isOpened():
             self.log("Cannot open camera")
             exit()
         while True:
             # Capture an image from the camera:
             # RPi: https://pillow.readthedocs.io/en/stable/reference/ImageGrab.html
-            ret_val, img_brg = self.camera.read() #cam.read() returns ret (0/1 if the camera is working) and img_brg, the actual image of the camera in a numpy array
+            ret_val, img_brg = self._camera.read() #cam.read() returns ret (0/1 if the camera is working) and img_brg, the actual image of the camera in a numpy array
             # if frame is read correctly ret is True
             if not ret_val:
                 self.log("Can't receive frame (stream end?). Exiting ...")
@@ -90,20 +100,20 @@ class MotionDetector:
             prepared_frame = cv2.GaussianBlur(src=prepared_frame, ksize=(5, 5), sigmaX=0)
 
             # Calculate the difference
-            if self.previous_frame is None:
+            if self._previous_frame is None:
                 # First frame; there is no previous one yet
-                self.previous_frame = prepared_frame
+                self._previous_frame = prepared_frame
                 continue
 
             # Calculate difference and update previous frame
-            diff_frame = cv2.absdiff(src1=self.previous_frame, src2=prepared_frame)
-            self.previous_frame = prepared_frame
+            diff_frame = cv2.absdiff(src1=self._previous_frame, src2=prepared_frame)
+            self._previous_frame = prepared_frame
             # Dilute the image a bit to make differences more seeable; more suitable for contour detection
             kernel = np.ones((5, 5))
             diff_frame = cv2.dilate(diff_frame, kernel, 1)
             # Only take different areas that are different enough (>20 / 255)
             thresh_frame = cv2.threshold(
-                src=diff_frame, thresh=20, maxval=255, type=cv2.THRESH_BINARY
+                src=diff_frame, thresh=self._opencv_diffing_threshold, maxval=255, type=cv2.THRESH_BINARY
             )[1]
 
             # Find and optionally draw contours
@@ -139,10 +149,10 @@ class MotionDetector:
 
 
     def stop(self):
-        if not self.camera is None:
+        if not self._camera is None:
             # When everything done, release the capture
             self.log("Stopping the camera stream...")
-            self.camera.release()
+            self._camera.release()
             cv2.destroyAllWindows()
 
 # -----
