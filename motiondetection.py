@@ -36,10 +36,29 @@ class MotionDetector:
 
     def __init__(self) -> None:
         """ Constructor, initializing properties with default values. """
+        self._debug = False
         self._previous_frame = None
         self._camera_number = 0
         self._camera = None
         self._opencv_diffing_threshold = 20
+
+
+    def __del__(self) -> None:
+        """ Destructor to close the camera stream if we have one open. """
+        if not self._camera is None:
+            self._camera.release()
+            cv2.destroyAllWindows()
+
+
+    @property
+    def debug(self) -> bool:
+        return self._debug
+
+    @debug.setter
+    def debug(self, flag: bool) -> None:
+        self._debug = flag
+        if flag:
+            self.logDebug("Debugging enabled")
 
 
     @property
@@ -79,6 +98,7 @@ class MotionDetector:
 
 
     def doIt(self) -> None:
+        self.log("Starting the camera stream...")
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
         self._camera = cv2.VideoCapture(self._camera_number)
         if not self._camera.isOpened():
@@ -130,18 +150,17 @@ class MotionDetector:
                 lineType=cv2.LINE_AA,
             )
             # Uncomment 6 lines below to stop drawing rectangles
-            # for contour in contours:
-            #   if cv2.contourArea(contour) < 50:
-            #     # too small: skip!
-            #       continue
-            #   (x, y, w, h) = cv2.boundingRect(contour)
-            #   cv2.rectangle(img=img_rgb, pt1=(x, y), pt2=(x + w, y + h), color=(0, 255, 0), thickness=2)
+            for contour in contours:
+               if cv2.contourArea(contour) < 50:
+                 # too small: skip!
+                   continue
+               (x, y, w, h) = cv2.boundingRect(contour)
+               cv2.rectangle(img=img_rgb, pt1=(x, y), pt2=(x + w, y + h), color=(0, 255, 0), thickness=2)
 
+            # Show the processed picture in a window:
             cv2.imshow("Motion detector", img_rgb)
-
-    #        if cv2.waitKey(30) == 27:
-    #            # out.release()
-    #            break
+            # Keep iterating through this while loop until the user presses the "q" button.
+            # The app that is wrapping around this class can also have a signal handler to deal with <CTRL><C> or "kill" commands.
             if cv2.waitKey(1) == ord('q'):
                 break
         # Stop the streaming when the user presses the "q" key:
@@ -180,12 +199,17 @@ if __name__ == "__main__":
     parser.add_argument("--version", \
                             action="version", \
                             version=MotionDetector.__version__)
+    parser.add_argument("--debug", "-d", \
+                            action="store_true", \
+                            help="Turn on debug-level logging")
     # Parse the command-line arguments:
     __ARGS=parser.parse_args()
 
     # Start the app:
     print(f"Starting {MotionDetector.version()}")
     motion_detector = MotionDetector()
-    print("Press the 'q' key to stop the app")
+    motion_detector.debug = __ARGS.debug
+    motion_detector.diffingThreshold = 100
+    print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
     motion_detector.doIt()
     print("Ending the app")
