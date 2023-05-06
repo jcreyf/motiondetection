@@ -184,10 +184,16 @@ class MotionDetector:
             # Find the smallest top left corner and the largest bottom right corner of all contours.
             # All changes fall within those coordinates:
             if len(areaList) > 0:
-                _x1=[min(i) for i in zip(*areaList)][0]
-                _y1=[min(i) for i in zip(*areaList)][1]
-                _x2=[max(i) for i in zip(*areaList)][2]
-                _y2=[max(i) for i in zip(*areaList)][3]
+                # This works:
+#                _x1=[min(i) for i in zip(*areaList)][0]
+#                _y1=[min(i) for i in zip(*areaList)][1]
+#                _x2=[max(i) for i in zip(*areaList)][2]
+#                _y2=[max(i) for i in zip(*areaList)][3]
+                # Using list comprehension is cleaner and faster?:
+                _x1=min(map(lambda x: x[0], areaList))
+                _y1=min(map(lambda x: x[1], areaList))
+                _x2=max(map(lambda x: x[2], areaList))
+                _y2=max(map(lambda x: x[3], areaList))
                 # Now draw a thick rectangle around the full change window:
                 cv2.rectangle(img=img_rgb, pt1=(_x1, _y1), pt2=(_x2, _y2), color=(0, 255, 0), thickness=2)
 
