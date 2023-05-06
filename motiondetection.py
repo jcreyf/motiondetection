@@ -14,11 +14,11 @@
 # ======================================================================================================== #
 
 # ToDo:
-#   - detect areas where movements can be seen;
 #   - try to zoom into those areas and take snapshots;
 #   - start recording video when movement is detected and stop a few seconds after last movement;
 #   - send a message with the base image and zoomed in pictures.  Also add link to where video will be stored;
 #   - pub/sub actions (have an abstract class that implements the basics (logging to console))
+# https://stackoverflow.com/questions/57195852/eliminate-or-ignore-all-small-or-overlapping-contours-or-rectangles-inside-a-big
 
 # pip install -r requirements.txt
 import cv2
@@ -78,11 +78,16 @@ class MotionDetector:
 
     @minimumPixelDifference.setter
     def minimumPixelDifference(self, value: int) -> None:
+        if value < 0 or value > 255:
+            raise ValueError(f"The minimum pixel difference needs to be between 0 and 255!  You're setting: {value}")
         self._minimum_pixel_difference = value
 
 
     def logSettings(self) -> None:
-        pass
+        self.log("Settings:")
+        self.log(f"  Debug: {self._debug}")
+        self.log(f"  Minimum block pixel difference: {self._minimum_pixel_difference}")
+        self.log(f"  Diffing threshold: {self._opencv_diffing_threshold}")
 
 
     def listCameras(self):
@@ -113,6 +118,7 @@ class MotionDetector:
 
 
     def doIt(self) -> None:
+        self.logSettings()
         self.log("Starting the camera stream...")
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
         self._camera = cv2.VideoCapture(self._camera_number)
@@ -134,13 +140,12 @@ class MotionDetector:
             prepared_frame = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
             prepared_frame = cv2.GaussianBlur(src=prepared_frame, ksize=(5, 5), sigmaX=0)
 
-            # Calculate the difference
+            # There's nothing to detect if this is the first frame:
             if self._previous_frame is None:
-                # First frame; there is no previous one yet
                 self._previous_frame = prepared_frame
                 continue
 
-            # Calculate difference and update previous frame
+            # Calculate differences between this and previous frame:
             diff_frame = cv2.absdiff(src1=self._previous_frame, src2=prepared_frame)
             self._previous_frame = prepared_frame
             # Dilute the image a bit to make differences more seeable; more suitable for contour detection
@@ -151,7 +156,9 @@ class MotionDetector:
                 src=diff_frame, thresh=self._opencv_diffing_threshold, maxval=255, type=cv2.THRESH_BINARY
             )[1]
 
-            # Find and optionally draw contours
+            # Reset the list of unique areas (this is used to filter out overlapping areas):
+            areaList = []
+            # Find contours of places in the image that has changes:
             contours, _ = cv2.findContours(
                 image=thresh_frame, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_SIMPLE
             )
@@ -174,7 +181,25 @@ class MotionDetector:
 #                        self.logDebug(f"too small {cv2.contourArea(contour)}")
                         continue
                     (x, y, w, h) = cv2.boundingRect(contour)
-                    cv2.rectangle(img=img_rgb, pt1=(x, y), pt2=(x + w, y + h), color=(0, 255, 0), thickness=2)
+                    areaList.append(list((x, y, x+w, y+h)))
+                    # Draw a thin rectangle arround all found differences.
+                    # We're not really interested in seeing all those individual differences though.
+                    if self.debug:
+                        cv2.rectangle(img=img_rgb, pt1=(x, y), pt2=(x + w, y + h), color=(0, 0, 255), thickness=1)
+
+            # Find the smallest top left corner and the largest bottom right corner of all contours.
+            # All changes fall within those coordinates:
+            if len(areaList) > 0:
+                _t=sorted(areaList, key=lambda k: [k[0]], reverse=False)
+                _x1=_t[0][0]
+                _t=sorted(areaList, key=lambda k: [k[2]], reverse=True)
+                _x2=_t[0][2]
+                _t=sorted(areaList, key=lambda k: [k[1]], reverse=False)
+                _y1=_t[0][1]
+                _t=sorted(areaList, key=lambda k: [k[3]], reverse=True)
+                _y2=_t[0][3]
+                # Now draw a thick rectangle around the full change window:
+                cv2.rectangle(img=img_rgb, pt1=(_x1, _y1), pt2=(_x2, _y2), color=(0, 255, 0), thickness=2)
 
             # Show the processed picture in a window:
             cv2.imshow("Motion detector", img_rgb)
@@ -221,6 +246,18 @@ if __name__ == "__main__":
     parser.add_argument("--debug", "-d", \
                             action="store_true", \
                             help="Turn on debug-level logging")
+    parser.add_argument("-pd", "--pixeldiff", \
+                            default=100, \
+                            dest="__PD", \
+                            required=False, \
+                            type=int, \
+                            help="Minimum number of pixels in the same block that need to be different [default=100]")
+    parser.add_argument("-dt", "--diffingthreshold", \
+                            default=20, \
+                            dest="__DT", \
+                            required=False, \
+                            type=int, \
+                            help="Diffing threshold (sensitivity) [default=20]")
     # Parse the command-line arguments:
     __ARGS=parser.parse_args()
 
@@ -228,8 +265,8 @@ if __name__ == "__main__":
     print(f"Starting {MotionDetector.version()}")
     motion_detector = MotionDetector()
     motion_detector.debug = __ARGS.debug
-    motion_detector.diffingThreshold = 100
-    motion_detector.minimumPixelDifference = 150
+    motion_detector.diffingThreshold = __ARGS.__DT
+    motion_detector.minimumPixelDifference = __ARGS.__PD
     print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
     motion_detector.doIt()
     print("Ending the app")
