@@ -166,38 +166,28 @@ class MotionDetector:
             if len(contours) > 0:
 #                self.logDebug(f"found {len(contours)} differences")
                 # Draw contours around the changed areas:
-                # cv2.drawContours(
-                #     image=img_rgb,
-                #     contours=contours,
-                #     contourIdx=-1,
-                #     color=(0, 255, 0),
-                #     thickness=2,
-                #     lineType=cv2.LINE_AA,
-                # )
+#                cv2.drawContours(image=img_rgb, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
                 # Draw rectangles around the changed areas:
                 for contour in contours:
                     if cv2.contourArea(contour) < self._minimum_pixel_difference:
                         # The dectected difference area is too small.  Lets ignore it.
-#                        self.logDebug(f"too small {cv2.contourArea(contour)}")
+#                        self.logDebug(f"change area is too small for our filter: {cv2.contourArea(contour)}")
                         continue
+                    # Get the coordinates of the contour and add them to an array that we will use to find the global change window:
                     (x, y, w, h) = cv2.boundingRect(contour)
                     areaList.append(list((x, y, x+w, y+h)))
-                    # Draw a thin rectangle arround all found differences.
-                    # We're not really interested in seeing all those individual differences though.
                     if self.debug:
+                        # Draw a thin rectangle arround all found differences.
+                        # We're not really interested in seeing all those individual differences though.
                         cv2.rectangle(img=img_rgb, pt1=(x, y), pt2=(x + w, y + h), color=(0, 0, 255), thickness=1)
 
             # Find the smallest top left corner and the largest bottom right corner of all contours.
             # All changes fall within those coordinates:
             if len(areaList) > 0:
-                _t=sorted(areaList, key=lambda k: [k[0]], reverse=False)
-                _x1=_t[0][0]
-                _t=sorted(areaList, key=lambda k: [k[2]], reverse=True)
-                _x2=_t[0][2]
-                _t=sorted(areaList, key=lambda k: [k[1]], reverse=False)
-                _y1=_t[0][1]
-                _t=sorted(areaList, key=lambda k: [k[3]], reverse=True)
-                _y2=_t[0][3]
+                _x1=[min(i) for i in zip(*areaList)][0]
+                _y1=[min(i) for i in zip(*areaList)][1]
+                _x2=[max(i) for i in zip(*areaList)][2]
+                _y2=[max(i) for i in zip(*areaList)][3]
                 # Now draw a thick rectangle around the full change window:
                 cv2.rectangle(img=img_rgb, pt1=(_x1, _y1), pt2=(_x2, _y2), color=(0, 255, 0), thickness=2)
 
