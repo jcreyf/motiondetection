@@ -298,6 +298,12 @@ if __name__ == "__main__":
                             required=False, \
                             type=int, \
                             help="Diffing threshold (sensitivity) [default=20]")
+    parser.add_argument("-cp", "--cameraport", \
+                            default=-1, \
+                            dest="__CAMPORT", \
+                            required=False, \
+                            type=int, \
+                            help="The camera to use.  The app will try to auto-detect if not set.")
     # Parse the command-line arguments:
     __ARGS=parser.parse_args()
 
@@ -310,9 +316,12 @@ if __name__ == "__main__":
         print(f"Cameras:\n {working_ports}")
 
     if len(working_ports) > 0:
-        camera=working_ports[0]
-        print(f"Using camera {camera['port']} with resolution: {camera['w']}x{camera['h']}")
-        motion_detector.cameraPortNumber = working_ports[0]["port"]
+        if __ARGS.__CAMPORT >= 0:
+            camera = __ARGS.__CAMPORT
+        else:
+            camera=working_ports[0]["port"]
+            print(f"Using camera {working_ports[0]['port']} with resolution: {working_ports[0]['w']}x{working_ports[0]['h']}")
+        motion_detector.cameraPortNumber = camera
         motion_detector.debug = __ARGS.debug
         motion_detector.diffingThreshold = __ARGS.__DT
         motion_detector.minimumPixelDifference = __ARGS.__PD
