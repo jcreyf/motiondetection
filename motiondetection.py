@@ -16,11 +16,13 @@
 # ToDo:
 #   - try to zoom into those areas and take snapshots;
 #   - start recording video when movement is detected and stop a few seconds after last movement;
+#   - save raw file and add contour rectangle to image fields;
 #   - send a message with the base image and zoomed in pictures.  Also add link to where video will be stored;
 #   - pub/sub actions (have an abstract class that implements the basics (logging to console))
 # https://stackoverflow.com/questions/57195852/eliminate-or-ignore-all-small-or-overlapping-contours-or-rectangles-inside-a-big
 
 # pip install -r requirements.txt
+import os
 import cv2
 import numpy as np
 #from PIL import ImageGrab
@@ -39,7 +41,7 @@ class MotionDetector:
         """ Constructor, initializing properties with default values. """
         self._debug = False
         self._previous_frame = None
-        self._camera_number = 0
+        self._camera_port_number = 0
         self._camera = None
         self._opencv_diffing_threshold = 20
         self._minimum_pixel_difference = 50
@@ -61,6 +63,15 @@ class MotionDetector:
         self._debug = flag
         if flag:
             self.logDebug("Debugging enabled")
+
+
+    @property
+    def cameraPortNumber(self) -> int:
+        return self._camera_port_number
+
+    @cameraPortNumber.setter
+    def cameraPortNumber(self, value: int) -> None:
+        self._camera_port_number = value
 
 
     @property
@@ -91,7 +102,36 @@ class MotionDetector:
 
 
     def listCameras(self):
-        pass
+        """
+        Test the ports and returns a tuple with the available ports and the ones that are working.
+        export OPENCV_LOG_LEVEL=OFF
+        export OPENCV_LOG_LEVEL=DEBUG
+        export OPENCV_VIDEOIO_DEBUG=1
+        """
+        non_working_ports = []
+        device_port = 0
+        working_ports = []
+        available_ports = []
+        # if there are more than 5 non working ports stop the testing:
+#        os.environ['OPENCV_LOG_LEVEL'] = 'OFF'
+        while len(non_working_ports) < 6:
+            camera = cv2.VideoCapture(device_port)
+            if not camera.isOpened():
+                non_working_ports.append(device_port)
+                self.logDebug(f"Port {device_port} is not working.")
+            else:
+                is_reading, img = camera.read()
+                w = int(camera.get(3))
+                h = int(camera.get(4))
+                camera.release()
+                if is_reading:
+                    self.logDebug(f"Port {device_port} is working and reads images ({w} x {h})")
+                    working_ports.append({"port":device_port, "w":w, "h":h})
+                else:
+                    self.logDebug(f"Port {device_port} for camera ({w} x {h}) is present but does not reads.")
+                    available_ports.append(device_port)
+            device_port +=1
+        return available_ports, working_ports, non_working_ports
 
 
     def loadConfig(self) -> None:
@@ -121,7 +161,7 @@ class MotionDetector:
         self.logSettings()
         self.log("Starting the camera stream...")
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
-        self._camera = cv2.VideoCapture(self._camera_number)
+        self._camera = cv2.VideoCapture(self._camera_port_number)
         if not self._camera.isOpened():
             self.log("Cannot open camera")
             exit()
@@ -196,6 +236,9 @@ class MotionDetector:
                 _y2=max(map(lambda x: x[3], areaList))
                 # Now draw a thick rectangle around the full change window:
                 cv2.rectangle(img=img_rgb, pt1=(_x1, _y1), pt2=(_x2, _y2), color=(0, 255, 0), thickness=2)
+                # Save this image to a file:
+                filename=f"/tmp/motion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+                cv2.imwrite(filename, img_rgb)
 
             # Show the processed picture in a window:
             cv2.imshow("Motion detector", img_rgb)
@@ -217,6 +260,7 @@ class MotionDetector:
 # -----
 
 if __name__ == "__main__":
+    os.environ['OPENCV_LOG_LEVEL'] = 'OFF'
     # Run this code when this file is opened as an application:
     motion_detector = None
 
@@ -260,9 +304,20 @@ if __name__ == "__main__":
     # Start the app:
     print(f"Starting {MotionDetector.version()}")
     motion_detector = MotionDetector()
-    motion_detector.debug = __ARGS.debug
-    motion_detector.diffingThreshold = __ARGS.__DT
-    motion_detector.minimumPixelDifference = __ARGS.__PD
-    print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
-    motion_detector.doIt()
-    print("Ending the app")
+    # Get a list of detected cameras:
+    available_ports, working_ports, nonworking_ports = motion_detector.listCameras()
+    if __ARGS.debug:
+        print(f"Cameras:\n {working_ports}")
+
+    if len(working_ports) > 0:
+        camera=working_ports[0]
+        print(f"Using camera {camera['port']} with resolution: {camera['w']}x{camera['h']}")
+        motion_detector.cameraPortNumber = working_ports[0]["port"]
+        motion_detector.debug = __ARGS.debug
+        motion_detector.diffingThreshold = __ARGS.__DT
+        motion_detector.minimumPixelDifference = __ARGS.__PD
+        print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
+        motion_detector.doIt()
+        print("Ending the app")
+    else:
+        print("It looks like there's no camera available!")
