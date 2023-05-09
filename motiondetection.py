@@ -157,6 +157,26 @@ class MotionDetector:
             self.log(f"DEBUG: {msg}")
 
 
+    def darknessScale(self, image) -> int:
+        """ Return the darness level of an image.
+            This is used to detect day vs. night and cloudy moments.
+            We can use the value of this to make the motion detection sensitivity more dynamic.
+        """
+# https://stackoverflow.com/questions/52505906/find-if-image-is-bright-or-dark
+        # Convert the mean to a percentage ( 0% == black; 100% == white)
+        return int(np.mean(image) / 255 * 100)
+#        return int(np.mean(image))
+
+    def averageBrightness(self, image) -> int:
+# https://github.com/arunnthevapalan/day-night-classifier/blob/master/classifier.ipynb
+        hsv=cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        sum_brightness = np.sum(hsv[:,:,2])
+# Update to set to camera resolution!
+        area = 1920 * 1080
+        avg=sum_brightness/area
+        return int(avg)
+
+
     def doIt(self) -> None:
         self.logSettings()
         self.log("Starting the camera stream...")
@@ -165,6 +185,9 @@ class MotionDetector:
         if not self._camera.isOpened():
             self.log("Cannot open camera")
             exit()
+
+        imageCnt=0
+
         while True:
             # Capture an image from the camera:
             # RPi: https://pillow.readthedocs.io/en/stable/reference/ImageGrab.html
@@ -185,6 +208,14 @@ class MotionDetector:
                 self._previous_frame = prepared_frame
                 continue
 
+# We should run this once a minute or so instead of based on image count and use this value to adjust the motion sensitivity (diffing threshold)
+# Detection might be more robust if we calculate for each image and take a mean value once per minute or so to set the detection sensitivity.
+            imageCnt=imageCnt+1
+            if imageCnt > 100:
+                self.log(f"image darkness: {self.darknessScale(prepared_frame)}")
+                self.log(f"image brightness: {self.averageBrightness(img_brg)}")
+                imageCnt=0
+
             # Calculate differences between this and previous frame:
             diff_frame = cv2.absdiff(src1=self._previous_frame, src2=prepared_frame)
             self._previous_frame = prepared_frame
@@ -192,9 +223,15 @@ class MotionDetector:
             kernel = np.ones((5, 5))
             diff_frame = cv2.dilate(diff_frame, kernel, 1)
             # Only take different areas that are different enough:
-            thresh_frame = cv2.threshold(
-                src=diff_frame, thresh=self._opencv_diffing_threshold, maxval=255, type=cv2.THRESH_BINARY
-            )[1]
+            thresh_frame = cv2.threshold(src=diff_frame, thresh=self._opencv_diffing_threshold, maxval=255, type=cv2.THRESH_BINARY)[1]
+            # There are ways to remove "noise" (small blobs)
+            # This does not seem to work too well, so we're now ignoring all contours that are smaller than some configurable size.
+# https://pyimagesearch.com/2016/10/31/detecting-multiple-bright-spots-in-an-image-with-python-and-opencv/
+#            thresh_frame = cv2.erode(thresh_frame, None, iterations=2)
+#            thresh_frame = cv2.dilate(thresh_frame, None, iterations=4)
+            if self.debug:
+                # Show the threshold frames if debug is enabled:
+                cv2.imshow("threshold frames", thresh_frame)
 
             # Reset the list of unique areas (this is used to filter out overlapping areas):
             areaList = []
