@@ -43,6 +43,7 @@ class MotionDetector:
         self._previous_frame = None
         self._camera_port_number = 0
         self._camera = None
+        self._camera_resolution = [{"w":0, "h":0}]
         self._opencv_diffing_threshold = 20
         self._minimum_pixel_difference = 50
 
@@ -121,8 +122,8 @@ class MotionDetector:
                 self.logDebug(f"Port {device_port} is not working.")
             else:
                 is_reading, img = camera.read()
-                w = int(camera.get(3))
-                h = int(camera.get(4))
+                w = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 camera.release()
                 if is_reading:
                     self.logDebug(f"Port {device_port} is working and reads images ({w} x {h})")
@@ -171,8 +172,8 @@ class MotionDetector:
 # https://github.com/arunnthevapalan/day-night-classifier/blob/master/classifier.ipynb
         hsv=cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         sum_brightness = np.sum(hsv[:,:,2])
-# Update to set to camera resolution!
-        area = 1920 * 1080
+        # How many pixels in an image from this camera?
+        area = self._camera_resolution[0]["w"] * self._camera_resolution[0]["h"]
         avg=sum_brightness/area
         return int(avg)
 
@@ -180,12 +181,16 @@ class MotionDetector:
     def doIt(self) -> None:
         self.logSettings()
         self.log("Starting the camera stream...")
+        scale = 100
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
         self._camera = cv2.VideoCapture(self._camera_port_number)
         if not self._camera.isOpened():
             self.log("Cannot open camera")
             exit()
 
+        # Set the camera resolution:
+        self._camera_resolution=[{"w": int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)), "h": int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}]
+        self.logDebug(f"Camera resolution: {self._camera_resolution}")
         imageCnt=0
 
         while True:
@@ -211,7 +216,7 @@ class MotionDetector:
 # We should run this once a minute or so instead of based on image count and use this value to adjust the motion sensitivity (diffing threshold)
 # Detection might be more robust if we calculate for each image and take a mean value once per minute or so to set the detection sensitivity.
             imageCnt=imageCnt+1
-            if imageCnt > 100:
+            if imageCnt > 50:
                 self.log(f"image darkness: {self.darknessScale(prepared_frame)}")
                 self.log(f"image brightness: {self.averageBrightness(img_brg)}")
                 imageCnt=0
@@ -277,8 +282,23 @@ class MotionDetector:
                 filename=f"/tmp/motion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
                 cv2.imwrite(filename, img_rgb)
 
+# https://stackoverflow.com/questions/50870405/how-can-i-zoom-my-webcam-in-open-cv-python
+            height, width, channels = img_brg.shape
+            centerX, centerY = int(height/2), int(width/2)
+            radiusX, radiusY = int(scale*height/100), int(scale*width/100)
+            minX, maxX = centerX-radiusX, centerX+radiusX
+            minY, maxY = centerY-radiusY, centerY+radiusY
+
+            cropped = img_brg[minX:maxX, minY:maxY]
+            resized_cropped = cv2.resize(cropped, (width, height))
+
             # Show the processed picture in a window:
-            cv2.imshow("Motion detector", img_rgb)
+            cv2.imshow("Motion detector", resized_cropped)
+#            cv2.imshow("Motion detector", img_rgb)
+            if cv2.waitKey(1) == ord('+'):
+                scale += 5
+            if cv2.waitKey(1) == ord('-'):
+                scale -= 5
             # Keep iterating through this while loop until the user presses the "q" button.
             # The app that is wrapping around this class can also have a signal handler to deal with <CTRL><C> or "kill" commands.
             if cv2.waitKey(1) == ord('q'):
