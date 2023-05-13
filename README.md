@@ -17,3 +17,9 @@ If pip opencv-python install fails:
 ```
 sudo apt-get install python-opencv
 ```
+
+https://singleboardblog.com/install-python-opencv-on-raspberry-pi/
+```
+pip install --upgrade opencv-contrib-python==4.7.0.72
+```
+192.168.5.220
