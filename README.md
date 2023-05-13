@@ -22,4 +22,7 @@ https://singleboardblog.com/install-python-opencv-on-raspberry-pi/
 ```
 pip install --upgrade opencv-contrib-python==4.7.0.72
 ```
+
+https://qengineering.eu/install-opencv-4.5-on-raspberry-pi-4.html
+
 192.168.5.220
