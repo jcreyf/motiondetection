@@ -295,9 +295,9 @@ class MotionDetector:
             # Show the processed picture in a window:
             cv2.imshow("Motion detector", resized_cropped)
 #            cv2.imshow("Motion detector", img_rgb)
-            if cv2.waitKey(1) == ord('+'):
+            if cv2.waitKey(1) == ord('a'):
                 scale += 5
-            if cv2.waitKey(1) == ord('-'):
+            if cv2.waitKey(1) == ord('s'):
                 scale -= 5
             # Keep iterating through this while loop until the user presses the "q" button.
             # The app that is wrapping around this class can also have a signal handler to deal with <CTRL><C> or "kill" commands.
