@@ -73,4 +73,10 @@ Processing triggers for man-db (2.9.4-2) ...
 Processing triggers for libc-bin (2.31-13+rpt2+rpi1+deb11u5) ...
 ```
 
+https://stackoverflow.com/questions/45601949/install-openexr-in-python-doesnt-work
+```
+sudo apt-get install libopenexr-dev
+sudo apt-get install openexr
+```
+
 192.168.5.220
