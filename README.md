@@ -25,4 +25,15 @@ pip install --upgrade opencv-contrib-python==4.7.0.72
 
 https://qengineering.eu/install-opencv-4.5-on-raspberry-pi-4.html
 
+```
+/> pip install openexr
+Defaulting to user installation because normal site-packages is not writeable
+Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
+Collecting openexr
+Downloading https://www.piwheels.org/simple/openexr/OpenEXR-1.3.9-cp39-cp39-linux_armv7l.whl (249 kB)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 249.3/249.3 kB 143.2 kB/s eta 0:00:00
+Installing collected packages: openexr
+Successfully installed openexr-1.3.9
+```
+
 192.168.5.220
