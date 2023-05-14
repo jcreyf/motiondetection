@@ -45,6 +45,7 @@ class MotionDetector:
         self._camera_port_number = 0
         self._camera = None
         self._camera_resolution = [{"w":0, "h":0}]
+        self._camera_rotation = 0
         self._opencv_diffing_threshold = 20
         self._minimum_pixel_difference = 50
 
@@ -88,6 +89,15 @@ class MotionDetector:
 
 
     @property
+    def cameraRotation(self) -> int:
+        return self._camera_rotation
+
+    @cameraPortNumber.setter
+    def cameraRotation(self, value: int) -> None:
+        self._camera_rotation = value
+
+
+    @property
     def diffingThreshold(self) -> int:
         return self._opencv_diffing_threshold
 
@@ -113,6 +123,7 @@ class MotionDetector:
         self.log(f"  Show video stream: {self._showVideo}")
         self.log(f"  Minimum block pixel difference: {self._minimum_pixel_difference}")
         self.log(f"  Diffing threshold: {self._opencv_diffing_threshold}")
+        self.log(f"  Camera rotation: {self._camera_rotation} degrees")
 
 
     def listCameras(self):
@@ -215,6 +226,14 @@ class MotionDetector:
                 self.log("Can't receive frame (stream end?). Exiting ...")
                 break
 
+            # Rotate the image if needed:
+            if self._camera_rotation > 0:
+                if self._camera_rotation == 90:
+                    img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_CLOCKWISE)
+                if self._camera_rotation == 180:
+                    img_brg=cv2.rotate(img_brg, cv2.ROTATE_180)
+                if self._camera_rotation == 270:
+                    img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_COUNTERCLOCKWISE)
             # Convert the image to RGB:
             img_rgb = cv2.cvtColor(src=img_brg, code=cv2.COLOR_BGR2RGB)
             # Convert the image; grayscale and blur
@@ -389,6 +408,12 @@ if __name__ == "__main__":
                             required=False, \
                             type=int, \
                             help="The camera to use.  The app will try to auto-detect if not set.")
+    parser.add_argument("-cr", "--camerarotation", \
+                            default=0, \
+                            dest="__CAMROTATION", \
+                            required=False, \
+                            type=int, \
+                            help="The camera image rotation (0 (default), 90, 180 or 270).")
     # Parse the command-line arguments:
     __ARGS=parser.parse_args()
 
@@ -407,6 +432,7 @@ if __name__ == "__main__":
             camera=working_ports[0]["port"]
             print(f"Using camera {working_ports[0]['port']} with resolution: {working_ports[0]['w']}x{working_ports[0]['h']}")
         motion_detector.cameraPortNumber = camera
+        motion_detector.cameraRotation = __ARGS.__CAMROTATION
         motion_detector.debug = __ARGS.debug
         motion_detector.diffingThreshold = __ARGS.__DT
         motion_detector.minimumPixelDifference = __ARGS.__PD
