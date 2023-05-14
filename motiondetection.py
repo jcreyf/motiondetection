@@ -44,7 +44,8 @@ class MotionDetector:
         self._previous_frame = None
         self._camera_port_number = 0
         self._camera = None
-        self._camera_resolution = [{"w":0, "h":0}]
+        self._camera_resolution_default = [{"w":0, "h":0}]
+        self._camera_resolution = [{"w":2592, "h":1944}]
         self._camera_rotation = 0
         self._opencv_diffing_threshold = 20
         self._minimum_pixel_difference = 50
@@ -123,6 +124,8 @@ class MotionDetector:
         self.log(f"  Show video stream: {self._showVideo}")
         self.log(f"  Minimum block pixel difference: {self._minimum_pixel_difference}")
         self.log(f"  Diffing threshold: {self._opencv_diffing_threshold}")
+        self.log(f"  Camera resolution (default): {self._camera_resolution_default}")
+        self.log(f"  Camera resolution: {self._camera_resolution}")
         self.log(f"  Camera rotation: {self._camera_rotation} degrees")
 
 
@@ -203,7 +206,6 @@ class MotionDetector:
 
 
     def doIt(self) -> None:
-        self.logSettings()
         self.log("Starting the camera stream...")
         scale = 100
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
@@ -213,8 +215,11 @@ class MotionDetector:
             exit()
 
         # Set the camera resolution:
-        self._camera_resolution=[{"w": int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)), "h": int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}]
-        self.logDebug(f"Camera resolution: {self._camera_resolution}")
+        self._camera_resolution_default=[{"w": int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)), "h": int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}]
+        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self._camera_resolution[0]["w"]))
+        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self._camera_resolution[0]["h"]))
+        self.logSettings()
+        self.log(f"Camera resolution set: {int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
         imageCnt=0
 
         while True:
