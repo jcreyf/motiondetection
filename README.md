@@ -78,5 +78,9 @@ https://stackoverflow.com/questions/45601949/install-openexr-in-python-doesnt-wo
 sudo apt-get install libopenexr-dev
 sudo apt-get install openexr
 ```
+This finally resolved the issue(?):
+```
+/> pip install -U numpy
+```
 
-192.168.5.220
+RPi: 192.168.5.220
