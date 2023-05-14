@@ -296,7 +296,9 @@ class MotionDetector:
             try:
                 cv2.imshow("Motion detector", resized_cropped)
             except Exception as ex:
-                self.log(f"Failed to show image on screen! {ex}")
+                template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+                message = template.format(type(ex).__name__, ex.args)
+                self.log(message)
 
 #            cv2.imshow("Motion detector", img_rgb)
             if cv2.waitKey(1) == ord('a'):
