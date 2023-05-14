@@ -110,6 +110,7 @@ class MotionDetector:
     def logSettings(self) -> None:
         self.log("Settings:")
         self.log(f"  Debug: {self._debug}")
+        self.log(f"  Show video stream: {self._showVideo}")
         self.log(f"  Minimum block pixel difference: {self._minimum_pixel_difference}")
         self.log(f"  Diffing threshold: {self._opencv_diffing_threshold}")
 
