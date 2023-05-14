@@ -293,7 +293,11 @@ class MotionDetector:
             resized_cropped = cv2.resize(cropped, (width, height))
 
             # Show the processed picture in a window:
-            cv2.imshow("Motion detector", resized_cropped)
+            try:
+                cv2.imshow("Motion detector", resized_cropped)
+            except as ex:
+                self.log(f"Failed to show image on screen! {ex}")
+
 #            cv2.imshow("Motion detector", img_rgb)
             if cv2.waitKey(1) == ord('a'):
                 scale += 5
