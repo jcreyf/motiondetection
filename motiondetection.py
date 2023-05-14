@@ -230,9 +230,9 @@ class MotionDetector:
 # Detection might be more robust if we calculate for each image and take a mean value once per minute or so to set the detection sensitivity.
             imageCnt=imageCnt+1
             if imageCnt > 50:
-                self.log(f"image darkness: {self.darknessScale(prepared_frame)}")
-                self.log(f"image brightness: {self.averageBrightness(img_brg)}")
                 imageCnt=0
+                self.logDebug(f"image darkness: {self.darknessScale(prepared_frame)}")
+                self.logDebug(f"image brightness: {self.averageBrightness(img_brg)}")
 
             # Calculate differences between this and previous frame:
             diff_frame = cv2.absdiff(src1=self._previous_frame, src2=prepared_frame)
