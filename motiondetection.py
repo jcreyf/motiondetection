@@ -312,7 +312,12 @@ class MotionDetector:
 
             # Show the processed picture in a window if we have the flag enbabled to show the video stream:
             if self._showVideo:
-                cv2.imshow("Motion detector", resized_cropped)
+                try:
+                    cv2.imshow("Motion detector", resized_cropped)
+                except Exception:
+                    self.log("We're getting an error when trying to display the video stream!!!")
+                    self.log("Disabling trying to show the video stream!")
+                    self.showVideo=False
 
 #            cv2.imshow("Motion detector", img_rgb)
             if cv2.waitKey(1) == ord('a'):
