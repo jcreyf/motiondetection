@@ -40,6 +40,7 @@ class MotionDetector:
     def __init__(self) -> None:
         """ Constructor, initializing properties with default values. """
         self._debug = False
+        self._showVideo = False
         self._previous_frame = None
         self._camera_port_number = 0
         self._camera = None
@@ -64,6 +65,17 @@ class MotionDetector:
         self._debug = flag
         if flag:
             self.logDebug("Debugging enabled")
+
+
+    @property
+    def showVideo(self) -> bool:
+        return self._showVideo
+
+    @showVideo.setter
+    def showVideo(self, flag: bool) -> None:
+        self._showVideo = flag
+        if flag:
+            self.logDebug("Showing video stream on screen")
 
 
     @property
@@ -234,9 +246,14 @@ class MotionDetector:
 # https://pyimagesearch.com/2016/10/31/detecting-multiple-bright-spots-in-an-image-with-python-and-opencv/
 #            thresh_frame = cv2.erode(thresh_frame, None, iterations=2)
 #            thresh_frame = cv2.dilate(thresh_frame, None, iterations=4)
-            if self.debug:
+            if self._showVideo and self.debug:
                 # Show the threshold frames if debug is enabled:
-                cv2.imshow("threshold frames", thresh_frame)
+                try:
+                    cv2.imshow("threshold frames", thresh_frame)
+                except Exception:
+                    self.log("We're getting an error when trying to display the video stream!!!")
+                    self.log("Disabling trying to show the video stream!")
+                    self.showVideo=False
 
             # Reset the list of unique areas (this is used to filter out overlapping areas):
             areaList = []
@@ -292,13 +309,9 @@ class MotionDetector:
             cropped = img_brg[minX:maxX, minY:maxY]
             resized_cropped = cv2.resize(cropped, (width, height))
 
-            # Show the processed picture in a window:
-            try:
+            # Show the processed picture in a window if we have the flag enbabled to show the video stream:
+            if self._showVideo:
                 cv2.imshow("Motion detector", resized_cropped)
-            except Exception as ex:
-                template = "An exception of type {0} occurred. Arguments:\n{1!r}"
-                message = template.format(type(ex).__name__, ex.args)
-                self.log(message)
 
 #            cv2.imshow("Motion detector", img_rgb)
             if cv2.waitKey(1) == ord('a'):
@@ -349,6 +362,9 @@ if __name__ == "__main__":
     parser.add_argument("--debug", "-d", \
                             action="store_true", \
                             help="Turn on debug-level logging")
+    parser.add_argument("-sv", "--showvideo", \
+                            action="store_true", \
+                            help="Show the video stream")
     parser.add_argument("-pd", "--pixeldiff", \
                             default=100, \
                             dest="__PD", \
@@ -388,6 +404,7 @@ if __name__ == "__main__":
         motion_detector.debug = __ARGS.debug
         motion_detector.diffingThreshold = __ARGS.__DT
         motion_detector.minimumPixelDifference = __ARGS.__PD
+        motion_detector.showVideo = __ARGS.showvideo
         print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
         motion_detector.doIt()
         print("Ending the app")
