@@ -295,7 +295,7 @@ class MotionDetector:
             # Show the processed picture in a window:
             try:
                 cv2.imshow("Motion detector", resized_cropped)
-            except as ex:
+            except Exception as ex:
                 self.log(f"Failed to show image on screen! {ex}")
 
 #            cv2.imshow("Motion detector", img_rgb)
