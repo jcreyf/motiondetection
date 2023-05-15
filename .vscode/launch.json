@@ -6,7 +6,8 @@
     "configurations": [
         {
             "args": [
-                "--debug"
+                "--debug",
+                "-chr '{\"w\": 10000, \"h\": 10000}'"
             ],
             "name": "motiondetection",
             "type": "python",
