@@ -1,2 +1,3 @@
 # Let's not ignore the VSCode files.  I want the debug launch control file vesioned too!
 #**/.vscode
+.DS_Store
