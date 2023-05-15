@@ -275,8 +275,20 @@ class MotionDetector:
                     img_brg=cv2.rotate(img_brg, cv2.ROTATE_180)
                 if self._camera_rotation == 270:
                     img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            # Scale down and convert the image to RGB:
-            img_rgb = cv2.resize(src=img_brg, dsize=(self._camera_resolution_low["w"], self._camera_resolution_low["h"]), interpolation = cv2.INTER_AREA)
+
+            try:
+                # Scale down and convert the image to RGB.
+                # This sometimes fails with this error:
+                #   OpenCV(4.5.3) .../resize.cpp:4051: error: (-215:Assertion failed) !ssize.empty() in function 'resize'
+                # It happens because of issues with the image.
+                # Lets catch the issue and ignore this image if it happens and go to the next...
+                img_rgb = cv2.resize(src=img_brg, dsize=(self._camera_resolution_low["w"], self._camera_resolution_low["h"]), interpolation = cv2.INTER_AREA)
+            except Exception as ex:
+                # Yep, this image is bad.  Skip and go on to the next!
+                self.log(f"Image resize failed! {str(e)}")
+                continue
+
+            # The resize was fine.  Keep processing it:
             img_rgb = cv2.cvtColor(src=img_rgb, code=cv2.COLOR_BGR2RGB)
             # Convert the image; grayscale and blur
             prepared_frame = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
