@@ -20,12 +20,16 @@
 #   - send a message with the base image and zoomed in pictures.  Also add link to where video will be stored;
 #   - pub/sub actions (have an abstract class that implements the basics (logging to console))
 # https://stackoverflow.com/questions/57195852/eliminate-or-ignore-all-small-or-overlapping-contours-or-rectangles-inside-a-big
+# https://stackoverflow.com/questions/29664399/capturing-video-from-two-cameras-in-opencv-at-once
+# https://www.raspberrypi.com/documentation/accessories/camera.html#:~:text=About%20the%20Camera%20Modules,-Edit%20this%20on&text=There%20are%20now%20several%20official,which%20was%20released%20in%202023.
+# https://projects.raspberrypi.org/en/projects/getting-started-with-picamera/7
+
 
 # pip install -r requirements.txt
 import os
+import json
 import cv2
 import numpy as np
-#from PIL import ImageGrab
 from datetime import datetime
 
 class MotionDetector:
@@ -44,8 +48,9 @@ class MotionDetector:
         self._previous_frame = None
         self._camera_port_number = 0
         self._camera = None
-        self._camera_resolution_default = [{"w":0, "h":0}]
-        self._camera_resolution = [{"w":2592, "h":1944}]
+        self._camera_resolution_default = {"w":0, "h":0}
+        self._camera_resolution_low = {"w":640, "h":480}
+        self._camera_resolution_high = {"w":1920, "h":1080}
         self._camera_rotation = 0
         self._opencv_diffing_threshold = 20
         self._minimum_pixel_difference = 50
@@ -90,6 +95,15 @@ class MotionDetector:
 
 
     @property
+    def cameraHighResolution(self):
+        return self._camera_resolution_high
+
+    @cameraHighResolution.setter
+    def cameraHighResolution(self, value) -> None:
+        self._camera_resolution_high=value
+
+
+    @property
     def cameraRotation(self) -> int:
         return self._camera_rotation
 
@@ -125,7 +139,8 @@ class MotionDetector:
         self.log(f"  Minimum block pixel difference: {self._minimum_pixel_difference}")
         self.log(f"  Diffing threshold: {self._opencv_diffing_threshold}")
         self.log(f"  Camera resolution (default): {self._camera_resolution_default}")
-        self.log(f"  Camera resolution: {self._camera_resolution}")
+        self.log(f"  Camera resolution (low): {self._camera_resolution_low}")
+        self.log(f"  Camera resolution (high): {self._camera_resolution_high}")
         self.log(f"  Camera rotation: {self._camera_rotation} degrees")
 
 
@@ -200,35 +215,44 @@ class MotionDetector:
         hsv=cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         sum_brightness = np.sum(hsv[:,:,2])
         # How many pixels in an image from this camera?
-        area = self._camera_resolution[0]["w"] * self._camera_resolution[0]["h"]
+        area = self._camera_resolution_low["w"] * self._camera_resolution_low["h"]
         avg=sum_brightness/area
         return int(avg)
 
 
+    def lowres(self) -> None:
+        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self._camera_resolution_low["w"]))
+        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self._camera_resolution_low["h"]))
+
+    def highres(self) -> None:
+        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self._camera_resolution_high["w"]))
+        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self._camera_resolution_high["h"]))
+
+
     def doIt(self) -> None:
         self.log("Starting the camera stream...")
-        scale = 100
+#        scale = 100
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
         self._camera = cv2.VideoCapture(self._camera_port_number)
         if not self._camera.isOpened():
             self.log("Cannot open camera")
             exit()
 
-        # Set the camera resolution:
-        self._camera_resolution_default=[{"w": int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)), "h": int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}]
-        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self._camera_resolution[0]["w"]))
-        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self._camera_resolution[0]["h"]))
+        # Set the lowres camera resolution (for image detection):
+        self._camera_resolution_default={"w": int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)), "h": int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}
+        self.highres()
         self.logSettings()
         self.log(f"Camera resolution set: {int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
+
         imageCnt=0
 
         while True:
-            # Capture an image from the camera:
+            # Capture an image from the camera (the image is captured as a numpi array):
             # RPi: https://pillow.readthedocs.io/en/stable/reference/ImageGrab.html
-            ret_val, img_brg = self._camera.read() #cam.read() returns ret (0/1 if the camera is working) and img_brg, the actual image of the camera in a numpy array
+            ret_val, img_brg = self._camera.read()
             # if frame is read correctly ret is True
             if not ret_val:
-                self.log("Can't receive frame (stream end?). Exiting ...")
+                self.log("Can't receive frame (stream end?)")
                 break
 
             # Rotate the image if needed:
@@ -321,28 +345,28 @@ class MotionDetector:
                 # Now draw a thick rectangle around the full change window:
                 cv2.rectangle(img=img_rgb, pt1=(_x1, _y1), pt2=(_x2, _y2), color=(0, 255, 0), thickness=2)
                 # Save this image to a file:
-                filename=f"/tmp/motion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-                cv2.imwrite(filename, img_rgb)
+                filename=f"/tmp/motion_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                cv2.imwrite(f"{filename}.jpg", img_rgb)
 
 # https://stackoverflow.com/questions/50870405/how-can-i-zoom-my-webcam-in-open-cv-python
-            height, width, channels = img_brg.shape
-            centerX, centerY = int(height/2), int(width/2)
-            radiusX, radiusY = int(scale*height/100), int(scale*width/100)
-            minX, maxX = centerX-radiusX, centerX+radiusX
-            minY, maxY = centerY-radiusY, centerY+radiusY
-
-            cropped = img_brg[minX:maxX, minY:maxY]
-            resized_cropped = cv2.resize(cropped, (width, height))
+#            height, width, channels = img_brg.shape
+#            centerX, centerY = int(height/2), int(width/2)
+#            radiusX, radiusY = int(scale*height/100), int(scale*width/100)
+#            minX, maxX = centerX-radiusX, centerX+radiusX
+#            minY, maxY = centerY-radiusY, centerY+radiusY
+#
+#            cropped = img_brg[minX:maxX, minY:maxY]
+#            resized_cropped = cv2.resize(cropped, (width, height))
 
             # Show the processed picture in a window if we have the flag enbabled to show the video stream:
             if self._showVideo:
                 try:
-                    cv2.imshow("Motion detector", resized_cropped)
-#                    cv2.imshow("Motion detector", img_rgb)
-                    if cv2.waitKey(1) == ord('a'):
-                        scale += 5
-                    if cv2.waitKey(1) == ord('s'):
-                        scale -= 5
+#                    cv2.imshow("Motion detector", resized_cropped)
+                    cv2.imshow("Motion detector", img_rgb)
+#                    if cv2.waitKey(1) == ord('a'):
+#                        scale += 5
+#                    if cv2.waitKey(1) == ord('s'):
+#                        scale -= 5
                     # Keep iterating through this while loop until the user presses the "q" button.
                     # The app that is wrapping around this class can also have a signal handler to deal with <CTRL><C> or "kill" commands.
                     if cv2.waitKey(1) == ord('q'):
@@ -419,6 +443,12 @@ if __name__ == "__main__":
                             required=False, \
                             type=int, \
                             help="The camera image rotation (0 (default), 90, 180 or 270).")
+    parser.add_argument("-chr", "--camerahighres", \
+                            default='{"w": 1920, "h": 1080}', \
+                            dest="__CAMHIGHRES", \
+                            required=False, \
+                            type=json.loads, \
+                            help="The camera high resolution (default: 1920x1080)")
     # Parse the command-line arguments:
     __ARGS=parser.parse_args()
 
@@ -438,6 +468,7 @@ if __name__ == "__main__":
             print(f"Using camera {working_ports[0]['port']} with resolution: {working_ports[0]['w']}x{working_ports[0]['h']}")
         motion_detector.cameraPortNumber = camera
         motion_detector.cameraRotation = __ARGS.__CAMROTATION
+        motion_detector.cameraHighResolution = __ARGS.__CAMHIGHRES
         motion_detector.debug = __ARGS.debug
         motion_detector.diffingThreshold = __ARGS.__DT
         motion_detector.minimumPixelDifference = __ARGS.__PD
