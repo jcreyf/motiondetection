@@ -7,7 +7,8 @@
         {
             "args": [
                 "--debug",
-                "-chr '{\"w\": 10000, \"h\": 10000}'"
+                "--cameralowres '{\"w\": 320, \"h\": 240}'",
+                "--camerahighres '{\"w\": 10000, \"h\": 10000}'"
             ],
             "name": "motiondetection",
             "type": "python",
