@@ -7,7 +7,7 @@
 #    -v          | --verbose           : show verbose level output                                         #
 #                                                                                                          #
 # Example:                                                                                                 #
-#   /> $0 -v                                                                                               #
+#   /> $0 ./motiondetection.py -sv -clr '{"w": 320, "h": 240}' -chr '{"w": 1920, "h": 1080}'               #
 #                                                                                                          #
 # ======================================================================================================== #
 #  2023-05-04  v0.1  jcreyf  Initial version.                                                              #
@@ -92,6 +92,15 @@ class MotionDetector:
     @cameraPortNumber.setter
     def cameraPortNumber(self, value: int) -> None:
         self._camera_port_number = value
+
+
+    @property
+    def cameraLowResolution(self):
+        return self._camera_resolution_low
+
+    @cameraLowResolution.setter
+    def cameraLowResolution(self, value) -> None:
+        self._camera_resolution_low=value
 
 
     @property
@@ -238,7 +247,7 @@ class MotionDetector:
             self.log("Cannot open camera")
             exit()
 
-        # Set the lowres camera resolution (for image detection):
+        # Grab images at the highest resolution the camera supports:
         self._camera_resolution_default={"w": int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)), "h": int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}
         self.highres()
         self.logSettings()
@@ -263,8 +272,9 @@ class MotionDetector:
                     img_brg=cv2.rotate(img_brg, cv2.ROTATE_180)
                 if self._camera_rotation == 270:
                     img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            # Convert the image to RGB:
-            img_rgb = cv2.cvtColor(src=img_brg, code=cv2.COLOR_BGR2RGB)
+            # Scale down and convert the image to RGB:
+            img_rgb = cv2.resize(src=img_brg, dsize=(self._camera_resolution_low["w"], self._camera_resolution_low["h"]), interpolation = cv2.INTER_AREA)
+            img_rgb = cv2.cvtColor(src=img_rgb, code=cv2.COLOR_BGR2RGB)
             # Convert the image; grayscale and blur
             prepared_frame = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
             prepared_frame = cv2.GaussianBlur(src=prepared_frame, ksize=(5, 5), sigmaX=0)
@@ -347,6 +357,7 @@ class MotionDetector:
                 # Save this image to a file:
                 filename=f"/tmp/motion_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 cv2.imwrite(f"{filename}.jpg", img_rgb)
+                cv2.imwrite(f"{filename}_full.jpg", img_brg)
 
 # https://stackoverflow.com/questions/50870405/how-can-i-zoom-my-webcam-in-open-cv-python
 #            height, width, channels = img_brg.shape
@@ -449,6 +460,12 @@ if __name__ == "__main__":
                             required=False, \
                             type=json.loads, \
                             help="The camera high resolution (default: 1920x1080)")
+    parser.add_argument("-clr", "--cameralowres", \
+                            default='{"w": 640, "h": 480}', \
+                            dest="__CAMLOWRES", \
+                            required=False, \
+                            type=json.loads, \
+                            help="The camera low resolution (default: 640x480)")
     # Parse the command-line arguments:
     __ARGS=parser.parse_args()
 
@@ -468,6 +485,7 @@ if __name__ == "__main__":
             print(f"Using camera {working_ports[0]['port']} with resolution: {working_ports[0]['w']}x{working_ports[0]['h']}")
         motion_detector.cameraPortNumber = camera
         motion_detector.cameraRotation = __ARGS.__CAMROTATION
+        motion_detector.cameraLowResolution = __ARGS.__CAMLOWRES
         motion_detector.cameraHighResolution = __ARGS.__CAMHIGHRES
         motion_detector.debug = __ARGS.debug
         motion_detector.diffingThreshold = __ARGS.__DT
