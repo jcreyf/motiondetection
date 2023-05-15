@@ -262,7 +262,10 @@ class MotionDetector:
             # if frame is read correctly ret is True
             if not ret_val:
                 self.log("Can't receive frame (stream end?)")
-                break
+                # Exit the loop if this is the very time we're trying to grab an image.
+                # Keep going otherwise!
+                if self._previous_frame is None:
+                    break
 
             # Rotate the image if needed:
             if self._camera_rotation > 0:
