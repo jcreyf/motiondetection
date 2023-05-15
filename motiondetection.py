@@ -314,6 +314,7 @@ class MotionDetector:
             kernel = np.ones((5, 5))
             diff_frame = cv2.dilate(diff_frame, kernel, 1)
             # Only take different areas that are different enough:
+# https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html
             thresh_frame = cv2.threshold(src=diff_frame, thresh=self._opencv_diffing_threshold, maxval=255, type=cv2.THRESH_BINARY)[1]
             # There are ways to remove "noise" (small blobs)
             # This does not seem to work too well, so we're now ignoring all contours that are smaller than some configurable size.
