@@ -1,0 +1,138 @@
+#
+# Cerberus schema definition for our config-file.
+# We are using this template in our app to validate the 'motiondeterctor.yaml' file.
+#
+# Cerberus docs:
+#   https://docs.python-cerberus.org/en/stable/
+#
+{
+    'config': {
+        'required': True,
+        'type': 'dict',
+        'schema': {
+            'hostname': {
+                'required': False,
+                'type': 'string',
+                'default': ''
+                # the application should get the hostname from the system if it's not set here
+            },
+            'debug': {
+                'required': False,
+                'type': 'boolean',
+                'default': False
+            },
+            'show_video': {
+                'required': False,
+                'type': 'boolean',
+                'default': False
+            },
+            'diffing_threshold': {
+                'required': False,
+                'type': 'integer',
+                'default': 20
+            },
+            'pixel_diff': {
+                'required': False,
+                'type': 'integer',
+                'default': 120
+            },
+            'image_directory': {
+                'required': False,
+                'type': 'string',
+                'default': '{app}/images'
+                # the application needs to parse the value and replace values between brackets!
+            },
+            'cameras': {
+                'required': False,
+                'type': 'list',
+                'schema': {
+                    'type': 'dict',
+                    'schema': {
+                        'name': {
+                            'required': False,
+                            'type': 'string',
+                            'default': 'cam0'
+                        },
+                        'port': {
+                            'required': False,
+                            'type': 'integer',
+                            'default': 0
+                        },
+                        'rotation': {
+                            'required': False,
+                            'type': 'integer',
+                            'default': 0
+                            # Valid values are: 0, 90, 180 and 270
+                        },
+                        'low_res': {
+                            'required': False,
+                            'type': 'dict',
+                            'schema': {
+                                'width': {
+                                    'required': False,
+                                    'type': 'integer',
+                                    'default': 640
+                                },
+                                'height': {
+                                    'required': False,
+                                    'type': 'integer',
+                                    'default': 480
+                                }
+                            }
+                        },
+                        'high_res': {
+                            'required': False,
+                            'type': 'dict',
+                            'schema': {
+                                'width': {
+                                    'required': False,
+                                    'type': 'integer',
+                                    'default': 1920
+                                },
+                                'height': {
+                                    'required': False,
+                                    'type': 'integer',
+                                    'default': 1080
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'exclusion_zones': {
+                'required': False,
+                'type': 'list',
+                'schema': {
+                    'type': 'dict',
+                    'schema': {
+                        'name': {
+                            'required': False,
+                            'type': 'string',
+                            'default': 'zone'
+                        },
+                        'top_x': {
+                            'required': True,
+                            'type': 'string'
+                            # Can contain an integer (pixel number) '130' or a percentage between brackets '{35%}'
+                        },
+                        'top_y': {
+                            'required': True,
+                            'type': 'string'
+                            # Can contain an integer (pixel number) '130' or a percentage between brackets '{35%}'
+                        },
+                        'bottom_x': {
+                            'required': True,
+                            'type': 'string'
+                            # Can contain an integer (pixel number) '130' or a percentage between brackets '{35%}'
+                        },
+                        'bottom_y': {
+                            'required': True,
+                            'type': 'string'
+                            # Can contain an integer (pixel number) '130' or a percentage between brackets '{35%}'
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
