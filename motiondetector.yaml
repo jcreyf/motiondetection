@@ -1,13 +1,13 @@
 ---
 config:
-  debug: true             # Show much more detail
+  debug: false             # Show much more detail
   show_video: true        # Show the images on screen as a video (need a graphical shell and thus fails on a headless system)
   diffing_threshold: 20   # Diffing sensitivity: 0 to 255 (0 == not detecting any change; 255 == everything is moving)
-  pixel_diff: 120         # At least this number of pixels must be different in a block
+  min_pixel_diff: 150     # At least this number of pixels must be different in a block
   image_directory: "{app}/images"
   cameras:
-    - name: "internal"
-      port: 0
+    - name: "logitech"
+      port_number: 0
       rotation: 0         # Rotate the image 0, 90, 180 or 270 degrees
       low_res:
         width: 640

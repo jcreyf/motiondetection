@@ -29,6 +29,7 @@
 # pip install -r requirements.txt
 import os                       # Used to get hostname
 import sys                      # Used to return exit values
+import time                     # Used to work with the timestamp the config-file was changed
 import yaml                     # Used to load and parse the YAML config-file
 import ast                      # Used to remove comment lines from the schema definition file
 import pprint                   # Used to pretty-print the config;
@@ -48,22 +49,26 @@ class MotionDetector:
 
     def __init__(self) -> None:
         """ Constructor, initializing properties with default values. """
+        self._needToReload = False          # A flag that is set when we detect that the config-file has changed;
+        self._configMode = False            # Is the app running in config mode? (used to validate the config-file and to set/test the exclusion zones);
         self._configFile = None             # Full path to the config-file;
         self._configDate = None             # Modification date of the config-file;
-        self._settings = {}                 # Dictionary with our settings loaded from the config-file;
-        self._configMode = False            # Is the app running in config mode?
-# Old:
-        self._debug = False
-        self._showVideo = False
-        self._previous_frame = None
-        self._camera_port_number = 0
-        self._camera = None
-        self._camera_resolution_default = {"w":0, "h":0}
-        self._camera_resolution_low = {"w":640, "h":480}
-        self._camera_resolution_high = {"w":1920, "h":1080}
-        self._camera_rotation = 0
-        self._opencv_diffing_threshold = 20
-        self._minimum_pixel_difference = 50
+        self._camera = None                 # The camera object that we use to capture images from;
+        self._previous_frame = None         # A copy of the previous image (this is what we use to compare the new image against);
+        self._settings = {                  # Dictionary with our settings loaded from the config-file;
+            "debug": False,
+            "show_video": False,
+            "diffing_threshold": 20,
+            "min_pixel_diff": 100,
+            "image_directory": "/tmp",
+            "cameras": [{
+                "name": "cam0",
+                "port_number": 0,
+                "rotation": 0,              # 0, 90, 180 or 270 degrees;
+                "low_res": {"width": 640, "height": 480},
+                "high_res": {"width": 1280, "height": 720}
+            }]
+        }
 
 
     def __del__(self) -> None:
@@ -71,6 +76,34 @@ class MotionDetector:
         if not self._camera is None:
             self._camera.release()
             cv2.destroyAllWindows()
+
+
+    @property
+    def needToReload(self) -> bool:
+        return self._needToReload
+
+
+    @property
+    def configMode(self) -> bool:
+        return self._configMode
+
+    configMode.setter
+    def configMode(self, flag: bool) -> None:
+        self._configMode = flag
+
+
+    @property
+    def configFile(self) -> str:
+        return self._configFile
+
+    @configFile.setter
+    def configFile(self, path: str) -> None:
+        self._configFile = path
+
+
+    @property
+    def configDate(self) -> time:
+        return self._configDate
 
 
     @property
@@ -90,79 +123,75 @@ class MotionDetector:
 
 
     @property
-    def configMode(self) -> bool:
-        return self._configMode
+    def diffingThreshold(self) -> int:
+        return self._settings['config']['diffing_threshold']
 
-    configMode.setter
-    def configMode(self, flag: bool) -> None:
-        self._configMode = flag
+    @diffingThreshold.setter
+    def diffingThreshold(self, value: int) -> None:
+        self._settings['config']['diffing_threshold'] = value
+
+
+    @property
+    def minimumPixelDifference(self) -> int:
+        return self._settings['config']['min_pixel_diff']
+
+    @minimumPixelDifference.setter
+    def minimumPixelDifference(self, value: int) -> None:
+        if value < 0 or value > 255:
+            raise ValueError(f"The minimum pixel difference needs to be between 0 and 255!  You're setting: {value}")
+        self._settings['config']['min_pixel_diff'] = value
 
 
     @property
     def showVideo(self) -> bool:
-        return self._showVideo
+        return self._settings['config']['show_video']
 
     @showVideo.setter
     def showVideo(self, flag: bool) -> None:
-        self._showVideo = flag
+        self._settings['config']['show_video'] = flag
         if flag:
             self.logDebug("Showing video stream on screen")
 
 
     @property
     def cameraPortNumber(self) -> int:
-        return self._camera_port_number
+        return self._settings['config']['cameras'][0]['port_number']
 
     @cameraPortNumber.setter
     def cameraPortNumber(self, value: int) -> None:
-        self._camera_port_number = value
+        self._settings['config']['cameras'][0]['port_number'] = value
+
+
+    @property
+    def cameraName(self) -> int:
+        return self._settings['config']['cameras'][0]['name']
 
 
     @property
     def cameraLowResolution(self):
-        return self._camera_resolution_low
+        return self._settings['config']['cameras'][0]['low_res']
 
     @cameraLowResolution.setter
     def cameraLowResolution(self, value) -> None:
-        self._camera_resolution_low=value
+        self._settings['config']['cameras'][0]['low_res'] = value
 
 
     @property
     def cameraHighResolution(self):
-        return self._camera_resolution_high
+        return self._settings['config']['cameras'][0]['high_res']
 
     @cameraHighResolution.setter
     def cameraHighResolution(self, value) -> None:
-        self._camera_resolution_high=value
+        self._settings['config']['cameras'][0]['high_res'] = value
 
 
     @property
     def cameraRotation(self) -> int:
-        return self._camera_rotation
+        return self._settings['config']['cameras'][0]['rotation']
 
-    @cameraPortNumber.setter
+    @cameraRotation.setter
     def cameraRotation(self, value: int) -> None:
-        self._camera_rotation = value
-
-
-    @property
-    def diffingThreshold(self) -> int:
-        return self._opencv_diffing_threshold
-
-    @diffingThreshold.setter
-    def diffingThreshold(self, value: int) -> None:
-        self._opencv_diffing_threshold = value
-
-
-    @property
-    def minimumPixelDifference(self) -> int:
-        return self._minimum_pixel_difference
-
-    @minimumPixelDifference.setter
-    def minimumPixelDifference(self, value: int) -> None:
-        if value < 0 or value > 255:
-            raise ValueError(f"The minimum pixel difference needs to be between 0 and 255!  You're setting: {value}")
-        self._minimum_pixel_difference = value
+        self._settings['config']['cameras'][0]['rotation'] = value
 
 
     def log(self, msg: str) -> None:
@@ -206,7 +235,7 @@ class MotionDetector:
                 debug: true
                 show_video: true
                 diffing_threshold: 20
-                pixel_diff: 120
+                min_pixel_diff: 120
                 image_directory: {app}/images
                 cameras:
                   - name: internal
@@ -281,6 +310,8 @@ class MotionDetector:
         # Set the hostname if it isn't set in the config-file:
         if self.hostname == '':
             self._settings['config']['hostname'] = os.uname()[1]
+        # Reset the reload-flag:
+        self._needToReload = False
 
 
     def configFileChanged(self) -> bool:
@@ -292,6 +323,7 @@ class MotionDetector:
         _configDate = os.path.getmtime(self.configFile)
         if _configDate != self.configDate:
             self.log("The config-file changed.  We need to reload the app!")
+            self._needToReload = True
             return True
 
 
@@ -324,7 +356,7 @@ class MotionDetector:
                 camera.release()
                 if is_reading:
                     self.logDebug(f"Port {device_port} is working and reads images ({w} x {h})")
-                    working_ports.append({"port":device_port, "w":w, "h":h})
+                    working_ports.append({"port_number":device_port, "width":w, "height":h})
                 else:
                     self.logDebug(f"Port {device_port} for camera ({w} x {h}) is present but does not reads.")
                     available_ports.append(device_port)
@@ -351,31 +383,30 @@ class MotionDetector:
         hsv=cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         sum_brightness = np.sum(hsv[:,:,2])
         # How many pixels in an image from this camera?
-        area = self._camera_resolution_low["w"] * self._camera_resolution_low["h"]
+        area = self.cameraLowResolution["width"] * self.cameraLowResolution["height"]
         avg=sum_brightness/area
         return int(avg)
 
 
     def lowres(self) -> None:
-        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self._camera_resolution_low["w"]))
-        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self._camera_resolution_low["h"]))
+        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self.cameraLowResolution["width"]))
+        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self.cameraLowResolution["height"]))
 
     def highres(self) -> None:
-        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self._camera_resolution_high["w"]))
-        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self._camera_resolution_high["h"]))
+        self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self.cameraHighResolution["width"]))
+        self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self.cameraHighResolution["height"]))
 
 
     def doIt(self) -> None:
-        self.log("Starting the camera stream...")
+        self.log(f"Starting camera '{self.cameraName}' stream...")
 #        scale = 100
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
-        self._camera = cv2.VideoCapture(self._camera_port_number)
+        self._camera = cv2.VideoCapture(self.cameraPortNumber)
         if not self._camera.isOpened():
             self.log("Cannot open camera")
             exit()
 
         # Grab images at the highest resolution the camera supports:
-        self._camera_resolution_default={"w": int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH)), "h": int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}
         self.highres()
         self.logSettings()
         self.log(f"Camera resolution set: {int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
@@ -395,12 +426,12 @@ class MotionDetector:
                     break
 
             # Rotate the image if needed:
-            if self._camera_rotation > 0:
-                if self._camera_rotation == 90:
+            if self.cameraRotation > 0:
+                if self.cameraRotation == 90:
                     img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_CLOCKWISE)
-                if self._camera_rotation == 180:
+                elif self.cameraRotation == 180:
                     img_brg=cv2.rotate(img_brg, cv2.ROTATE_180)
-                if self._camera_rotation == 270:
+                elif self.cameraRotation == 270:
                     img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
             try:
@@ -409,10 +440,10 @@ class MotionDetector:
                 #   OpenCV(4.5.3) .../resize.cpp:4051: error: (-215:Assertion failed) !ssize.empty() in function 'resize'
                 # It happens because of issues with the image.
                 # Lets catch the issue and ignore this image if it happens and go to the next...
-                img_rgb = cv2.resize(src=img_brg, dsize=(self._camera_resolution_low["w"], self._camera_resolution_low["h"]), interpolation = cv2.INTER_AREA)
+                img_rgb = cv2.resize(src=img_brg, dsize=(self.cameraLowResolution["width"], self.cameraLowResolution["height"]), interpolation = cv2.INTER_AREA)
             except Exception as ex:
                 # Yep, this image is bad.  Skip and go on to the next!
-                self.log(f"Image resize failed! {str(e)}")
+                self.log(f"Image resize failed! {str(ex)}")
                 continue
 
             # The resize was fine.  Keep processing it:
@@ -426,14 +457,6 @@ class MotionDetector:
                 self._previous_frame = prepared_frame
                 continue
 
-# We should run this once a minute or so instead of based on image count and use this value to adjust the motion sensitivity (diffing threshold)
-# Detection might be more robust if we calculate for each image and take a mean value once per minute or so to set the detection sensitivity.
-            imageCnt=imageCnt+1
-            if imageCnt > 50:
-                imageCnt=0
-                self.logDebug(f"image darkness: {self.darknessScale(prepared_frame)}")
-                self.logDebug(f"image brightness: {self.averageBrightness(img_brg)}")
-
             # Calculate differences between this and previous frame:
             diff_frame = cv2.absdiff(src1=self._previous_frame, src2=prepared_frame)
             self._previous_frame = prepared_frame
@@ -442,13 +465,13 @@ class MotionDetector:
             diff_frame = cv2.dilate(diff_frame, kernel, 1)
             # Only take different areas that are different enough:
 # https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html
-            thresh_frame = cv2.threshold(src=diff_frame, thresh=self._opencv_diffing_threshold, maxval=255, type=cv2.THRESH_BINARY)[1]
+            thresh_frame = cv2.threshold(src=diff_frame, thresh=self.diffingThreshold, maxval=255, type=cv2.THRESH_BINARY)[1]
             # There are ways to remove "noise" (small blobs)
             # This does not seem to work too well, so we're now ignoring all contours that are smaller than some configurable size.
 # https://pyimagesearch.com/2016/10/31/detecting-multiple-bright-spots-in-an-image-with-python-and-opencv/
 #            thresh_frame = cv2.erode(thresh_frame, None, iterations=2)
 #            thresh_frame = cv2.dilate(thresh_frame, None, iterations=4)
-            if self._showVideo and self.debug:
+            if self.showVideo and self.debug:
                 # Show the threshold frames if debug is enabled:
                 try:
                     cv2.imshow("threshold frames", thresh_frame)
@@ -470,7 +493,7 @@ class MotionDetector:
 #                cv2.drawContours(image=img_rgb, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
                 # Draw rectangles around the changed areas:
                 for contour in contours:
-                    if cv2.contourArea(contour) < self._minimum_pixel_difference:
+                    if cv2.contourArea(contour) < self.minimumPixelDifference:
                         # The dectected difference area is too small.  Lets ignore it.
 #                        self.logDebug(f"change area is too small for our filter: {cv2.contourArea(contour)}")
                         continue
@@ -513,7 +536,7 @@ class MotionDetector:
 #            resized_cropped = cv2.resize(cropped, (width, height))
 
             # Show the processed picture in a window if we have the flag enbabled to show the video stream:
-            if self._showVideo:
+            if self.showVideo:
                 try:
 #                    cv2.imshow("Motion detector", resized_cropped)
                     cv2.imshow("Motion detector", img_rgb)
@@ -529,6 +552,21 @@ class MotionDetector:
                     self.log("We're getting an error when trying to display the video stream!!!")
                     self.log("Disabling trying to show the video stream!")
                     self.showVideo=False
+
+            # Check the brightness of the image every so often to adjust the sensitivity throughout the day.
+            # At the same time, also check if the user changed settings in the config=file.  Reload the app if he did!
+            imageCnt=imageCnt+1
+            if imageCnt > 500:
+# We should run this once a minute or so instead of based on image count and use this value to adjust the motion sensitivity (diffing threshold)
+# Detection might be more robust if we calculate for each image and take a mean value once per minute or so to set the detection sensitivity.
+                imageCnt=0
+                self.logDebug(f"image darkness: {self.darknessScale(prepared_frame)}")
+                self.logDebug(f"image brightness: {self.averageBrightness(img_brg)}")
+                # Check and see if the config-file got updated before we continue.
+                # We need to restart with the new config if it changed!
+                if self.configFileChanged():
+                    # Breaking out of this loop will kick us back to the main application loop, which will restart the app:
+                    break
 
         # Stop the streaming when the user presses the "q" key:
         self.stop()
@@ -609,13 +647,13 @@ if __name__ == "__main__":
                             type=int, \
                             help="The camera image rotation (0 (default), 90, 180 or 270).")
     parser.add_argument("-chr", "--camerahighres", \
-                            default='{"w": 1920, "h": 1080}', \
+                            default='{"width": 1920, "height": 1080}', \
                             dest="__CAMHIGHRES", \
                             required=False, \
                             type=json.loads, \
                             help="The camera high resolution (default: 1920x1080)")
     parser.add_argument("-clr", "--cameralowres", \
-                            default='{"w": 640, "h": 480}', \
+                            default='{"width": 640, "height": 480}', \
                             dest="__CAMLOWRES", \
                             required=False, \
                             type=json.loads, \
@@ -635,25 +673,33 @@ if __name__ == "__main__":
 
     # Get a list of detected cameras:
     available_ports, working_ports, nonworking_ports = motion_detector.listCameras()
-    if __ARGS.debug:
+    if motion_detector.configMode or __ARGS.config or __ARGS.debug:
         print(f"Cameras:\n {working_ports}")
 
     if len(working_ports) > 0:
         if __ARGS.__CAMPORT >= 0:
             camera = __ARGS.__CAMPORT
         else:
-            camera=working_ports[0]["port"]
-            print(f"Using camera {working_ports[0]['port']} with resolution: {working_ports[0]['w']}x{working_ports[0]['h']}")
-        motion_detector.cameraPortNumber = camera
-        motion_detector.cameraRotation = __ARGS.__CAMROTATION
-        motion_detector.cameraLowResolution = __ARGS.__CAMLOWRES
-        motion_detector.cameraHighResolution = __ARGS.__CAMHIGHRES
-        motion_detector.debug = __ARGS.debug
-        motion_detector.diffingThreshold = __ARGS.__DT
-        motion_detector.minimumPixelDifference = __ARGS.__PD
-        motion_detector.showVideo = __ARGS.showvideo
-        print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
-        motion_detector.doIt()
+            camera=working_ports[0]["port_number"]
+            print(f"Using camera {working_ports[0]['port_number']} with resolution: {working_ports[0]['width']}x{working_ports[0]['height']}")
+# Temporarily block out to test the config-file code.  These command line args will be able to override config-file values:
+#        motion_detector.cameraPortNumber = camera
+#        motion_detector.cameraRotation = __ARGS.__CAMROTATION
+#        motion_detector.cameraLowResolution = __ARGS.__CAMLOWRES
+#        motion_detector.cameraHighResolution = __ARGS.__CAMHIGHRES
+#        motion_detector.debug = __ARGS.debug
+#        motion_detector.diffingThreshold = __ARGS.__DT
+#        motion_detector.minimumPixelDifference = __ARGS.__PD
+#        motion_detector.showVideo = __ARGS.showvideo
+#        print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
+        while True:
+            motion_detector.doIt()
+            # The app may have detected that the config-file changed.  Reload in that case:
+            if motion_detector._needToReload:
+                print("****RELOAD****")
+                motion_detector.loadConfig()
+            else:
+                break
         print("Ending the app")
     else:
         print("It looks like there's no camera available!")
