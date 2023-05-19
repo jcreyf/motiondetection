@@ -28,6 +28,7 @@
 
 # pip install -r requirements.txt
 import os                       # Used to get hostname
+import re                       # Used to validate dynamic exclusion zone values (regex to check and parse values)
 import sys                      # Used to return exit values
 import time                     # Used to work with the timestamp the config-file was changed
 import yaml                     # Used to load and parse the YAML config-file
@@ -54,7 +55,10 @@ class MotionDetector:
         self._configFile = None             # Full path to the config-file;
         self._configDate = None             # Modification date of the config-file;
         self._camera = None                 # The camera object that we use to capture images from;
-        self._previous_frame = None         # A copy of the previous image (this is what we use to compare the new image against);
+        self._camera_resolution_x = 0       # The width of the current camera resultion
+        self._camera_resolution_y = 0       # The height of the current camera resoltion
+        self._image = None                  # The current image
+        self._previous_image = None         # A copy of the previous image (this is what we use to compare the new image against);
         self._settings = {                  # Dictionary with our settings loaded from the config-file;
             "debug": False,
             "show_video": False,
@@ -67,7 +71,9 @@ class MotionDetector:
                 "rotation": 0,              # 0, 90, 180 or 270 degrees;
                 "low_res": {"width": 640, "height": 480},
                 "high_res": {"width": 1280, "height": 720}
-            }]
+            }],
+            "exclusion_zones": [],
+            "notifications": []
         }
 
 
@@ -276,10 +282,10 @@ class MotionDetector:
                 print("Failed to read the config file!")
                 print(e)
                 sys.exit(1)
+
         # Get the modification time of the config-file.
         # We'll use this to detect file changes and dynamically reload the config when it changes.
         self._configDate = os.path.getmtime(self.configFile)
-
         # Load the schema definition file so that we can validate the config-file:
         # I could have used Pydantic for this but I wanted to do this with Cerberus.
         _configSchemaFile = f"{os.path.dirname(os.path.realpath(__file__))}/config.schema"
@@ -310,8 +316,15 @@ class MotionDetector:
         # Set the hostname if it isn't set in the config-file:
         if self.hostname == '':
             self._settings['config']['hostname'] = os.uname()[1]
+        # Add an empty exclusion zones dictionary if there is none in the config-file:
+        if not "exclusion_zones" in self._settings["config"]:
+            self._settings["config"]["exclusion_zones"] = []
+        # Add an empty notifications dictionary if there is none in the config-file:
+        if not "notifications" in self._settings["config"]:
+            self._settings["config"]["notifications"] = []
         # Reset the reload-flag:
         self._needToReload = False
+        
 
 
     def configFileChanged(self) -> bool:
@@ -389,17 +402,19 @@ class MotionDetector:
 
 
     def lowres(self) -> None:
+        """ Switch the camera to low resolution mode """
         self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self.cameraLowResolution["width"]))
         self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self.cameraLowResolution["height"]))
 
     def highres(self) -> None:
+        """ Switch the camera to high resolution mode """
         self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, int(self.cameraHighResolution["width"]))
         self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(self.cameraHighResolution["height"]))
 
 
-    def doIt(self) -> None:
+    def __startCamera(self) -> None:
+        """ Private method to start the camera stream. """
         self.log(f"Starting camera '{self.cameraName}' stream...")
-#        scale = 100
         # https://docs.opencv.org/3.4/dd/d43/tutorial_py_video_display.html
         self._camera = cv2.VideoCapture(self.cameraPortNumber)
         if not self._camera.isOpened():
@@ -409,30 +424,74 @@ class MotionDetector:
         # Grab images at the highest resolution the camera supports:
         self.highres()
         self.logSettings()
-        self.log(f"Camera resolution set: {int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
+        self._camera_resolution_x = int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self._camera_resolution_y = int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.log(f"Camera resolution set: {self._camera_resolution_x}x{self._camera_resolution_y}")
 
+
+    def __rotateImage(self) -> None:
+        """ Private method to rotate the raw image. """
+        if self.cameraRotation > 0:
+            if self.cameraRotation == 90:
+                self._image=cv2.rotate(self._image, cv2.ROTATE_90_CLOCKWISE)
+            elif self.cameraRotation == 180:
+                self._image=cv2.rotate(self._image, cv2.ROTATE_180)
+            elif self.cameraRotation == 270:
+                self._image=cv2.rotate(self._image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+
+    def __parseExclusionZoneValue(self, value: str, max: int) -> int:
+        """ The exclusion zone value can be a number or a string in this format: '{NNN%}' """
+        if re.search("^{\d{1,3}%}$", value):
+            self.log(f"    value '{value}' is a percentage of {max} pixels ({value[1:-2]}%)")
+            percentage = int(value[1:-2])
+            return int(max * percentage / 100)
+        else:
+            return int(value)
+
+
+    def __setupExclusionZones(self) -> None:
+        """ Private method to read the exclusion zone config and turn it into a usable dictionary. """
+        zones=self._settings["config"]["exclusion_zones"]
+        if len(zones) == 0:
+            self.log("No exclusion zones configured")
+            return
+
+        self.log(f"Processing {len(zones)} exclusion zones:")
+        for zone in zones:
+            self.log(f"- {zone}")
+            name = zone["name"]
+            topX = zone["top_x"]
+            topY = zone["top_y"]
+            bottomX = zone["bottom_x"]
+            bottomY = zone["bottom_y"]
+            self.log(f"  {name} = {topX}:{topY} -> {bottomX}:{bottomY}")
+            topX = self.__parseExclusionZoneValue(topX, self._camera_resolution_x)
+            topY = self.__parseExclusionZoneValue(topY, self._camera_resolution_y)
+            bottomX = self.__parseExclusionZoneValue(bottomX, self._camera_resolution_x)
+            bottomY = self.__parseExclusionZoneValue(bottomY, self._camera_resolution_y)
+            self.log(f"    -> {topX}:{topY} -> {bottomX}:{bottomY}")
+
+
+    def run(self) -> None:
+        """ Main motion detection method """
+        self.__startCamera()
+#        scale = 100
         imageCnt=0
 
         while True:
             # Capture an image from the camera (the image is captured as a numpi array):
             # RPi: https://pillow.readthedocs.io/en/stable/reference/ImageGrab.html
-            ret_val, img_brg = self._camera.read()
-            # if frame is read correctly ret is True
+            ret_val, self._image = self._camera.read()
             if not ret_val:
                 self.log("Can't receive frame (stream end?)")
                 # Exit the loop if this is the very time we're trying to grab an image.
                 # Keep going otherwise!
-                if self._previous_frame is None:
+                if self._previous_image is None:
                     break
 
             # Rotate the image if needed:
-            if self.cameraRotation > 0:
-                if self.cameraRotation == 90:
-                    img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_CLOCKWISE)
-                elif self.cameraRotation == 180:
-                    img_brg=cv2.rotate(img_brg, cv2.ROTATE_180)
-                elif self.cameraRotation == 270:
-                    img_brg=cv2.rotate(img_brg, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            self.__rotateImage()
 
             try:
                 # Scale down and convert the image to RGB.
@@ -440,7 +499,7 @@ class MotionDetector:
                 #   OpenCV(4.5.3) .../resize.cpp:4051: error: (-215:Assertion failed) !ssize.empty() in function 'resize'
                 # It happens because of issues with the image.
                 # Lets catch the issue and ignore this image if it happens and go to the next...
-                img_rgb = cv2.resize(src=img_brg, dsize=(self.cameraLowResolution["width"], self.cameraLowResolution["height"]), interpolation = cv2.INTER_AREA)
+                img_rgb = cv2.resize(src=self._image, dsize=(self.cameraLowResolution["width"], self.cameraLowResolution["height"]), interpolation = cv2.INTER_AREA)
             except Exception as ex:
                 # Yep, this image is bad.  Skip and go on to the next!
                 self.log(f"Image resize failed! {str(ex)}")
@@ -453,13 +512,13 @@ class MotionDetector:
             prepared_frame = cv2.GaussianBlur(src=prepared_frame, ksize=(5, 5), sigmaX=0)
 
             # There's nothing to detect if this is the first frame:
-            if self._previous_frame is None:
-                self._previous_frame = prepared_frame
+            if self._previous_image is None:
+                self._previous_image = prepared_frame
                 continue
 
             # Calculate differences between this and previous frame:
-            diff_frame = cv2.absdiff(src1=self._previous_frame, src2=prepared_frame)
-            self._previous_frame = prepared_frame
+            diff_frame = cv2.absdiff(src1=self._previous_image, src2=prepared_frame)
+            self._previous_image = prepared_frame
             # Dilute the image a bit to make differences more seeable; more suitable for contour detection
             kernel = np.ones((5, 5))
             diff_frame = cv2.dilate(diff_frame, kernel, 1)
@@ -523,16 +582,16 @@ class MotionDetector:
                 # Save this image to a file:
                 filename=f"/tmp/motion_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 cv2.imwrite(f"{filename}.jpg", img_rgb)
-                cv2.imwrite(f"{filename}_full.jpg", img_brg)
+                cv2.imwrite(f"{filename}_full.jpg", self._image)
 
 # https://stackoverflow.com/questions/50870405/how-can-i-zoom-my-webcam-in-open-cv-python
-#            height, width, channels = img_brg.shape
+#            height, width, channels = self._image.shape
 #            centerX, centerY = int(height/2), int(width/2)
 #            radiusX, radiusY = int(scale*height/100), int(scale*width/100)
 #            minX, maxX = centerX-radiusX, centerX+radiusX
 #            minY, maxY = centerY-radiusY, centerY+radiusY
 #
-#            cropped = img_brg[minX:maxX, minY:maxY]
+#            cropped = self._image[minX:maxX, minY:maxY]
 #            resized_cropped = cv2.resize(cropped, (width, height))
 
             # Show the processed picture in a window if we have the flag enbabled to show the video stream:
@@ -561,7 +620,7 @@ class MotionDetector:
 # Detection might be more robust if we calculate for each image and take a mean value once per minute or so to set the detection sensitivity.
                 imageCnt=0
                 self.logDebug(f"image darkness: {self.darknessScale(prepared_frame)}")
-                self.logDebug(f"image brightness: {self.averageBrightness(img_brg)}")
+                self.logDebug(f"image brightness: {self.averageBrightness(self._image)}")
                 # Check and see if the config-file got updated before we continue.
                 # We need to restart with the new config if it changed!
                 if self.configFileChanged():
@@ -572,7 +631,31 @@ class MotionDetector:
         self.stop()
 
 
+    def runConfig(self) -> None:
+        """ Run the application in config-mode. 
+        
+        This basically pulls part of the configuration to test things like exlusion zones and alerting.
+        """
+        self.log("** RUNNING IN CONFIG-MODE **")
+        self.__startCamera()
+        # Capture an image from the camera (the image is captured as a numpi array):
+        ret_val, self._image = self._camera.read()
+        if not ret_val:
+            self.log("Can't receive frame (stream end?)")
+
+        # Rotate the image if needed:
+        self.__rotateImage()
+        # Setup exclusion zones:
+        self.__setupExclusionZones()
+
+        # Save this image to a file:
+        cv2.imwrite("/tmp/motion_config.jpg", self._image)
+
+        self.stop()
+
+
     def stop(self):
+        """ Method to stop the camera strean and clean up the application """
         if not self._camera is None:
             # When everything done, release the capture
             self.log("Stopping the camera stream...")
@@ -613,11 +696,11 @@ if __name__ == "__main__":
     parser.add_argument("--version", \
                             action="version", \
                             version=MotionDetector.__version__)
-    parser.add_argument("--debug", "-d", \
+    parser.add_argument("-d", "--debug", \
                             action="store_true", \
                             help="Turn on debug-level logging")
-    parser.add_argument("--config", "-c", \
-                            action="store_false", \
+    parser.add_argument("-c", "--config", \
+                            action="store_true", \
                             help="Running in config-mode")
     parser.add_argument("-sv", "--showvideo", \
                             action="store_true", \
@@ -661,15 +744,15 @@ if __name__ == "__main__":
     # Parse the command-line arguments:
     __ARGS=parser.parse_args()
 
-    if __ARGS.config:
-        print("** CONFIG MODE **")
-
     # Start the app:
     print(f"Starting {MotionDetector.version()}")
     motion_detector = MotionDetector()
     motion_detector.configMode = __ARGS.config
     motion_detector.loadConfig()
-    motion_detector.saveProcessID()
+
+    if __ARGS.config:
+        motion_detector.runConfig()
+        exit(0)
 
     # Get a list of detected cameras:
     available_ports, working_ports, nonworking_ports = motion_detector.listCameras()
@@ -692,8 +775,12 @@ if __name__ == "__main__":
 #        motion_detector.minimumPixelDifference = __ARGS.__PD
 #        motion_detector.showVideo = __ARGS.showvideo
 #        print("Press the 'q' key to stop the app (the camera window needs to have the focus!)")
+
+        # We're about to go in an infinite loop that will most probably run as a background process.
+        # Save the processID to a file so it's easy to find and can be used to kill the process when needed.
+        motion_detector.saveProcessID()
         while True:
-            motion_detector.doIt()
+            motion_detector.run()
             # The app may have detected that the config-file changed.  Reload in that case:
             if motion_detector._needToReload:
                 print("****RELOAD****")
